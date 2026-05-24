@@ -1,7 +1,6 @@
 {
   "name": "notes-app-frontend",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build"
@@ -9,6 +8,6 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1"
+    "vite": "^4.0.0"
   }
 }

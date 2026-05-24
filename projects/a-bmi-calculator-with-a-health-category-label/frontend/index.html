@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BMI Calculator</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    .container { margin: 2rem auto; width: 300px; text-align: center; }
+    label, input, button { display: block; margin: 1rem auto 0; text-align: left; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>BMI Calculator</h1>
+    <form id="bmiForm">
+      <label for="weight">Weight (kg):</label>
+      <input type="number" id="weight" name="weight" required>
+
+      <label for="height">Height (m):</label>
+      <input type="number" step="0.1" id="height" name="height" required>
+
+      <button type="submit">Calculate BMI</button>
+    </form>
+    <p id="result"></p>
+  </div>
+
+  <script>
+    document.getElementById('bmiForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      
+      const weight = parseFloat(document.getElementById('weight').value);
+      const height = parseFloat(document.getElementById('height').value);
+
+      if (isNaN(weight) || isNaN(height)) {
+        document.getElementById('result').innerText = 'Please enter valid numbers';
+        return;
+      }
+
+      const bmi = weight / Math.pow(height, 2);
+      let category;
+
+      if (bmi < 18.5) {
+        category = 'Underweight';
+      } else if (bmi >= 18.5 && bmi <= 24.9) {
+        category = 'Normal weight';
+      } else if (bmi >= 25 && bmi <= 29.9) {
+        category = 'Overweight';
+      } else {
+        category = 'Obesity';
+      }
+
+      document.getElementById('result').innerText = `BMI: ${bmi.toFixed(2)} - Category: ${category}`;
+    });
+  </script>
+</body>
+</html>

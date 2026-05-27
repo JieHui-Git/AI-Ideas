@@ -3,66 +3,46 @@ import axios from 'axios';
 
 function App() {
   const [notes, setNotes] = useState([]);
-  const [newNoteTitle, setNewNoteTitle] = useState('');
-  const [newNoteText, setNewNoteText] = useState('');
+  const [noteText, setNoteText] = useState('');
 
   useEffect(() => {
     fetchNotes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function fetchNotes() {
-    try {
-      const response = await axios.get('/api/notes');
-      setNotes(response.data);
-    } catch (error) {
-      console.error('Error fetching notes:', error);
-    }
-  }
-
-  async function createNote(e) {
-    e.preventDefault();
-    try {
-      const response = await axios.post('/api/notes', { title: newNoteTitle, text: newNoteText });
-      setNotes([...notes, response.data]);
-      setNewNoteTitle('');
-      setNewNoteText('');
-    } catch (error) {
-      console.error('Error creating note:', error);
-    }
+  async function addNote() {
+    await axios.post('http://localhost:8000/notes', { text: noteText });
+    setNoteText('');
+    fetchNotes();
   }
 
   async function deleteNote(id) {
-    try {
-      await axios.delete(`/api/notes/${id}`);
-      setNotes(notes.filter(note => note.id !== id));
-    } catch (error) {
-      console.error(`Error deleting note ${id}:`, error);
-    }
+    await axios.delete(`http://localhost:8000/notes/${id}`);
+    fetchNotes();
+  }
+
+  async function updateNote(id, newText) {
+    await axios.put(`http://localhost:8000/notes/${id}`, { text: newText });
+    fetchNotes();
+  }
+
+  async function fetchNotes() {
+    const response = await axios.get('http://localhost:8000/notes');
+    setNotes(response.data);
   }
 
   return (
     <div>
       <h1>Notes App</h1>
-      <form onSubmit={createNote}>
-        <input
-          type="text"
-          value={newNoteTitle}
-          onChange={(e) => setNewNoteTitle(e.target.value)}
-          placeholder="Title"
-        />
-        <textarea
-          value={newNoteText}
-          onChange={(e) => setNewNoteText(e.target.value)}
-          placeholder="Take a note here..."
-        />
-        <button type="submit">Add Note</button>
-      </form>
+      <input value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+      <button onClick={addNote}>Add Note</button>
       <ul>
-        {notes.map(note => (
+        {notes.map((note) => (
           <li key={note.id}>
-            <h2>{note.title}</h2>
-            <p>{note.text}</p>
+            <input
+              type="text"
+              value={note.text}
+              onChange={(e) => updateNote(note.id, e.target.value)}
+            />
             <button onClick={() => deleteNote(note.id)}>Delete</button>
           </li>
         ))}

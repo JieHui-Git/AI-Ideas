@@ -1,92 +1,68 @@
-import os
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from flask import Flask, request, jsonify
 import sqlite3
 
-app = FastAPI()
+app = Flask(__name__)
 
-# Database setup
-os.makedirs('data', exist_ok=True)
-conn = sqlite3.connect(os.path.join('data', 'polls.db'))
-c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS polls 
-             (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT UNIQUE NOT NULL, options TEXT NOT NULL)''')
-c.execute('''CREATE TABLE IF NOT EXISTS votes 
-             (poll_id INTEGER, option TEXT, FOREIGN KEY(poll_id) REFERENCES polls(id))''')
-conn.commit()
+def get_db_connection():
+    conn = sqlite3.connect('data.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# Middleware for CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+@app.before_first_request
+def create_tables():
+    conn = get_db_connection()
+    conn.execute('''CREATE TABLE IF NOT EXISTS polls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        question TEXT NOT NULL,
+        options TEXT NOT NULL,
+        votes TEXT NOT NULL
+    )''')
+    conn.commit()
+    conn.close()
 
-class Poll(BaseModel):
-    question: str
-    options: list
+@app.route('/polls', methods=['POST'])
+def create_poll():
+    data = request.json
+    conn = get_db_connection()
+    conn.execute('''INSERT INTO polls (question, options, votes)
+        VALUES (?, ?, ?)''', 
+        (data['question'], ','.join(data['options']),(','.join('0' for _ in range(len(data['options']))))
+    ))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Poll created successfully'}), 201
 
-@app.post("/polls/")
-async def create_poll(poll: Poll):
-    conn = sqlite3.connect(os.path.join('data', 'polls.db'))
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO polls (question, options) VALUES (?, ?)", （poll.question, ','.join(poll.options)))
-        poll_id = c.lastrowid
-        conn.commit()
-    except sqlite3.IntegrityError:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail="Question already taken")
-    
-    return {"id": poll_id, "question": poll.question, "options": poll.options}
+@app.route('/polls', methods=['GET'])
+def get_polls():
+    conn = get_db_connection()
+    polls = conn.execute('''SELECT * FROM polls''').fetchall()
+    conn.close()
+    poll_list = []
+    for poll in polls:
+        options = poll['options'].split(',')
+        votes = list(map(int, poll['votes'].split(',')))
+        poll_dict = {
+            'id': poll['id'],
+            'question': poll['question'],
+            'options': options,
+            'votes': votes
+        }
+        poll_list.append(poll_dict)
+    return jsonify(poll_list), 200
 
-@app.get("/polls/")
-async def get_polls():
-    conn = sqlite3.connect(os.path.join('data', 'polls.db'))
-    c = conn.cursor()
-    polls = [dict(row) for row in c.execute("SELECT id, question, options FROM polls")]
-    
-    return {"polls": polls}
+@app.route('/polls/<int:poll_id>/vote/<int:option_index>', methods=['POST'])
+def vote(poll_id, option_index):
+    conn = get_db_connection()
+    cur = conn.execute('''SELECT * FROM polls WHERE id  = ?''', (poll_id))
+    poll = cur.fetchone()
+    options = poll['options'].split(',')
+    votes = list(map(int, poll['votes'].split(',')))
+    votes[option_index] += 1
+    conn.execute('''UPDATE polls SET options = ?, votes = ? WHERE id = ?''',
+               (','.join(options), ','.join(map(str, votes)), poll_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Vote counted successfully'}), 200
 
-@app.post("/polls/{poll_id}/vote/")
-async def vote(poll_id: int, option: str):
-    conn = sqlite3.connect(os.path.join('data', 'polls.db'))
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO votes (poll_id, option) VALUES (?, ?)", (poll_id, option))
-        conn.commit()
-    except sqlite3.Error:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail="Invalid option")
-    
-    return {"message": "Vote recorded"}
-
-@app.get("/polls/{poll_id}/results/")
-async def get_results(poll_id: int):
-    conn = sqlite3.connect(os.path.join('data', 'polls.db'))
-    c = conn.cursor()
-    poll = c.execute("SELECT question, options FROM polls WHERE id = ?", (poll_id,)).fetchone()
-    
-    if not poll:
-        raise HTTPException(status_code=404, detail="Poll not found")
-    
-    result = {"question": poll[0], "options": [x.strip() for x in poll[1].split(',')] if poll[1] else [], "vote_count": []}
-    options = {option: 0 for option in result["options"]}
-    
-    votes_cursor = c.execute("SELECT option FROM votes WHERE poll_id = ?", (poll_id,))
-    vote_counts = [votes_cursor.fetchone()[0] for _ in range(votes_cursor.rowcount)]
-    
-    for v in vote_counts:
-        if v in options:
-            options[v] += 1
-    
-    result["vote_count"] = list(options.values())
-    
-    return result
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+if __name__ == '__main__':
+    app.run(debug=True)

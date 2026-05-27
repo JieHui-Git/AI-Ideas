@@ -1,40 +1,32 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 
-const App = () => {
+function App() {
   const [longUrl, setLongUrl] = useState('');
   const [shortUrl, setShortUrl] = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const res = await fetch('http://localhost:3000/shorten', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ longUrl }),
-    });
-    const data = await res.json();
-    setShortUrl(data.shortUrl);
-  };
+  async function handleShortenClick() {
+    try {
+      const response = await axios.post('http://localhost:5000/shorten', { long_url: longUrl });
+      setShortUrl(response.data.short_url);
+    } catch (error) {
+      console.error(error);
+    }
+  }
 
   return (
-    <div style={{ textAlign: 'center', marginTop: '50px' }}>
+    <div style={{ textAlign: 'center', marginTop: '100px' }}>
       <h1>URL Shortener</h1>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={longUrl}
-          onChange={(e) => setLongUrl(e.target.value)}
-          placeholder="Enter a long URL..."
-          required
-        />
-        <button type="submit">Shorten URL</button>
-      </form>
-      {shortUrl && (
-        <div style={{ margin: '20px 0' }}>
-          Short URL: <a href={shortUrl} target="_blank" rel="noopener noreferrer">{shortUrl}</a>
-        </div>
-      )}
+      <input
+        type="text"
+        value={longUrl}
+        onChange={(e) => setLongUrl(e.target.value)}
+        placeholder="Enter URL"
+      />
+      <button onClick={handleShortenClick}>shorten</button>
+      {shortUrl && <p>Shortened URL: <a href={`${shortUrl}/redirect`} target="_blank" rel="noreferrer">{shortUrl}</a></p>}
     </div>
   );
-};
+}
 
 export default App;

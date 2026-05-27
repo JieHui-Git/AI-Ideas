@@ -1,61 +1,60 @@
-from fastapi import FastAPI, HTTPException
+from flask import Flask, request, jsonify
 import sqlite3
-from typing import Dict
 
-app = FastAPI()
+app = Flask(__name__)
 
 def init_db():
-    conn = sqlite3.connect('url_shortener.db')
-    c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS urls (id INTEGER PRIMARY KEY AUTOINCREMENT, long_url TEXT UNIQUE NOT NULL, short_code TEXT UNIQUE NOT NULL)")
+  conn = sqlite3.connect('urls.db')
+  c = conn.cursor()
+  c.execute('''CREATE TABLE IF NOT EXISTS urls (short_url TEXT PRIMARY KEY, long_url TEXT)''')
+  conn.commit()
+  conn.close()
+
+init_db()
+
+@app.route('/shorten', methods=['POST'])
+def shorten_url():
+  data = request.get_json()
+  long_url = data['long_url']
+  
+  conn = sqlite3.connect('urls.db')
+  c = conn.cursor()
+  c.execute('SELECT * FROM urls WHERE long_url = ?', (long_url,))
+  url = c.fetchone()
+
+  if url:
+    short_url = url[0]
+  else:
+    import uuid
+    short_url = str(uuid.uuid4())[:6]  # generate a random string
+    while True:
+      conn = sqlite3.connect('urls.db')
+      c = conn.cursor()
+      c.execute('SELECT * FROM urls WHERE short_url = ?', (short_url,))
+      existing_url = c.fetchone()
+      if not existing_url:
+        break
+      short_url = str(uuid.uuid4())[:6]
+
+    c.execute('INSERT INTO urls VALUES (?, ?)', (short_url, long_url))
     conn.commit()
-    conn.close()
 
-@app.on_event("startup")
-def startup_event():
-    init_db()
+  full_short_url = request.host_url + short_url
+  conn.close()
 
-short_codes = {}
-last_id = 0
+  return jsonify({'short_url': full_short_url})
 
-@app.post("/shorten", response_model=Dict[str, str])
-async def shorten_url(data: Dict[str, str]):
-    global last_id
-    long_url = data["longUrl"]
-    
-    conn = sqlite3.connect('url_shortener.db')
-    c = conn.cursor()
+@app.route('/<short_url>/redirect', methods=['GET'])
+def redirect_to_long(short_url):
+  conn = sqlite3.connect('urls.db')
+  c = conn.cursor()
+  c.execute('SELECT long_url FROM urls WHERE short_url = ?', (short_url,))
+  url = c.fetchone()
 
-    # Check if the URL already exists with a short code
-    c.execute("SELECT short_code FROM urls WHERE long_url=?", (long_url,))
-    existing_code = c.fetchone()
-    
-    if existing_code:
-        short_code = existing_code[0]
-    else:
-        last_id += 1
-        short_code = f"{'a' * 6}{last_id:0>6}"
-        
-        # Ensure the short code is unique
-        while len(short_code) != len(set(short_code)) != len(short_code.replace('a', '')):
-            last_id += 1
-            short_code = f"{'a' * 6}{last_id:0>6}"
+  if url:
+    return {'redirect': url[0]}
+  else:
+    return jsonify({'error': 'Short URL not found'}), 404
 
-        c.execute("INSERT INTO urls (long_url, short_code) VALUES (?, ?)", (long_url, short_code))
-
-    conn.commit()
-    conn.close()
-
-    return {"shortUrl": "http://localhost:3000/" + short_code}
-
-@app.get("/{code}")
-async def redirect_to_long_url(code: str):
-    conn = sqlite3.connect('url_shortener.db')
-    c = conn.cursor()
-    c.execute("SELECT long_url FROM urls WHERE short_code=?", (code,))
-    result = c.fetchone()
-
-    if result:
-        return {"redirect": result[0]}
-    else:
-        raise HTTPException(status_code=404, detail="URL not found")
+if __name__ == '__main__':
+  app.run(debug=True, port=5000)

@@ -1,12 +1,7 @@
 {
-  "name": "notes-app-backend",
+  "name": "notes-backend",
   "version": "1.0.0",
-  "scripts": {
-    "start": "node app.js"
-  },
   "dependencies": {
-    "body-parser": "^1.20.1",
-    "express": "^4.18.2",
-    "sqlite3": "^5.1.6"
+    "express": "^4.18.1"
   }
 }

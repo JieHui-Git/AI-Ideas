@@ -1,10 +1,11 @@
-```jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-function App() {
+const App = () => {
   const [notes, setNotes] = useState([]);
-  const [newNote, setNewNote] = useState('');
+  const [noteText, setNoteText] = useState('');
+  const [editMode, setEditMode] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   useEffect(() => {
     fetchNotes();
@@ -12,33 +13,41 @@ function App() {
 
   const fetchNotes = async () => {
     try {
-      const response = await axios.get('http://localhost:3000/notes');
+      const response = await axios.get('/api/notes');
       setNotes(response.data);
     } catch (error) {
       console.error('Error fetching notes:', error);
     }
   };
 
-  const handleNoteChange = (event) => {
-    setNewNote(event.target.value);
-  };
-
   const addNote = async () => {
+    if (!noteText.trim()) return;
     try {
-      if (newNote.trim() !== '') {
-        await axios.post('http://localhost:3000/notes', { content: newNote });
-        fetchNotes();
-        setNewNote('');
-      }
+      const response = await axios.post('/api/notes', { text: noteText });
+      setNotes([...notes, response.data]);
+      setNoteText('');
     } catch (error) {
       console.error('Error adding note:', error);
     }
   };
 
+  const editNote = async () => {
+    if (!noteText.trim()) return;
+    try {
+      await axios.put(`/api/notes/${editingId}`, { text: noteText });
+      setNotes(notes.map(note => note.id === editingId ? { ...note, text: noteText } : note));
+      setEditMode(false);
+      setEditingId(null);
+      setNoteText('');
+    } catch (error) {
+      console.error('Error editing note:', error);
+    }
+  };
+
   const deleteNote = async (id) => {
     try {
-      await axios.delete(`http://localhost:3000/notes/${id}`);
-      fetchNotes();
+      await axios.delete(`/api/notes/${id}`);
+      setNotes(notes.filter(note => note.id !== id));
     } catch (error) {
       console.error('Error deleting note:', error);
     }
@@ -48,23 +57,32 @@ function App() {
     <div>
       <h1>Notes App</h1>
       <input
-        type="text"
-        value={newNote}
-        onChange={handleNoteChange}
-        placeholder="Add a new note"
+        value={noteText}
+        onChange={(e) => setNoteText(e.target.value)}
+        placeholder="Enter a note"
       />
-      <button onClick={addNote}>Add Note</button>
+      {editMode ? (
+        <button onClick={editNote}>Save Note</button>
+      ) : (
+        <button onClick={addNote}>Add Note</button>
+      )}
       <ul>
-        {notes.map((note) => (
+        {notes.map(note => (
           <li key={note.id}>
-            {note.content}{' '}
-            <button onClick={() => deleteNote(note.id)}>Delete</button>
+            {note.text}
+            <div>
+              <button onClick={() => {
+                setEditMode(true);
+                setEditingId(note.id);
+                setNoteText(note.text);
+              }}>Edit</button>
+              <button onClick={() => deleteNote(note.id)}>Delete</button>
+            </div>
           </li>
         ))}
       </ul>
     </div>
   );
-}
+};
 
 export default App;
-```

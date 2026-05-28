@@ -1,9 +1,11 @@
 {
-  "name": "poll-app-backend",
+  "name": "poll-creator-backend",
   "version": "1.0.0",
-  "scripts": { "start": "node server.js" },
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "express": "^4.18.2",
-    "sqlite3": "^5.0.2"
+    "sqlite3": "^5.1.6"
   }
 }

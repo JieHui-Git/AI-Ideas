@@ -1,38 +1,49 @@
+```js
 const express = require('express');
-const fs = require('fs');
+const fs = require('fs-extra');
 const path = require('path');
 
 const app = express();
 app.use(express.json());
 
-const notesFilePath = path.join(__dirname, 'notes.json');
+const dataFilePath = path.join(__dirname, 'notes.json');
 
-if (!fs.existsSync(notesFilePath)) {
-  fs.writeFileSync(notesFilePath, JSON.stringify([]));
+async function readNotes() {
+  try {
+    return await fs.readJson(dataFilePath);
+  } catch (error) {
+    if (error.code === ' ENOENT') {
+      return [];
+    }
+    throw error;
+  }
 }
 
-let noteId = 1;
-
-app.get('/api/notes', (req, res) => {
-  const notes = JSON.parse(fs.readFileSync(notesFilePath));
-  res.send(notes);
+app.get('/notes', async (req, res) => {
+  const notes = await readNotes();
+  res.json(notes);
 });
 
-app.post('/api/notes', (req, res) => {
-  const notes = JSON.parse(fs.readFileSync(notesFilePath));
-  const newNote = { id: noteId++, content: req.body.content };
+app.post('/notes', async (req, res) => {
+  const notes = await readNotes();
+  const newNote = {
+    id: Date.now().toString(),
+    content: req.body.content,
+  };
   notes.push(newNote);
-  fs.writeFileSync(notesFilePath, JSON.stringify(notes, null, 2));
-  res.send(newNote);
+  await fs.writeJson(dataFilePath, notes, { spaces: 2 });
+  res.json(newNote);
 });
 
-app.delete('/api/notes/:id', (req, res) => {
-  const notes = JSON.parse(fs.readFileSync(notesFilePath));
-  const updatedNotes = notes.filter(note => note.id !== parseInt(req.params.id));
-  fs.writeFileSync(notesFilePath, JSON.stringify(updatedNotes, null, 2));
-  res.sendStatus(204);
+app.delete('/notes/:id', async (req, res) => {
+  const notes = await readNotes();
+  const updatedNotes = notes.filter((note) => note.id !== req.params.id);
+  await fs.writeJson(dataFilePath, updatedNotes, { spaces: 2 });
+  res.status(204).send();
 });
 
-app.listen(3000, () => {
-  console.log('Server is running on port 3000');
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
+```

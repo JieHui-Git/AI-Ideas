@@ -1,4 +1,3 @@
-```js
 const express = require('express');
 const fs = require('fs-extra');
 const path = require('path');
@@ -6,44 +5,77 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 
-const dataFilePath = path.join(__dirname, 'notes.json');
+const notesPath = path.join(__dirname, 'notes.json');
 
-async function readNotes() {
-  try {
-    return await fs.readJson(dataFilePath);
-  } catch (error) {
-    if (error.code === ' ENOENT') {
-      return [];
-    }
-    throw error;
+let idCounter = 0;
+fs.readJson(notesPath).catch(() => {
+  const initialNotes = [];
+  fs.writeJsonSync(notesPath, initialNotes);
+  return initialNotes;
+}).then(initialNotes => {
+  if (initialNotes.length > 0) {
+    idCounter = Math.max(...initialNotes.map(note => note.id)) + 1;
   }
-}
-
-app.get('/notes', async (req, res) => {
-  const notes = await readNotes();
-  res.json(notes);
 });
 
-app.post('/notes', async (req, res) => {
-  const notes = await readNotes();
-  const newNote = {
-    id: Date.now().toString(),
-    content: req.body.content,
-  };
-  notes.push(newNote);
-  await fs.writeJson(dataFilePath, notes, { spaces: 2 });
-  res.json(newNote);
+app.get('/api/notes', async (req, res) => {
+  try {
+    const notes = await fs.readJson(notesPath);
+    res.json(notes);
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to fetch notes' });
+  }
 });
 
-app.delete('/notes/:id', async (req, res) => {
-  const notes = await readNotes();
-  const updatedNotes = notes.filter((note) => note.id !== req.params.id);
-  await fs.writeJson(dataFilePath, updatedNotes, { spaces: 2 });
-  res.status(204).send();
+app.post('/api/notes', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: 'Note text is required' });
+
+    const note = { id: idCounter++, text };
+    const notes = await fs.readJson(notesPath);
+    notes.push(note);
+    await fs.writeJson(notesPath, notes);
+
+    res.json(note);
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to add note' });
+  }
+});
+
+app.put('/api/notes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: 'Note text is required' });
+
+    let notes = await fs.readJson(notesPath);
+    const noteIndex = notes.findIndex(note => note.id === parseInt(id));
+    if (noteIndex === -1) return res.status(404).json({ error: 'Note not found' });
+
+    notes[noteIndex] = { id: parseInt(id), text };
+    await fs.writeJson(notesPath, notes);
+
+    res.json(notes[noteIndex]);
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to update note' });
+  }
+});
+
+app.delete('/api/notes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let notes = await fs.readJson(notesPath);
+    notes = notes.filter(note => note.id !== parseInt(id));
+    await fs.writeJson(notesPath, notes);
+
+    res.json({ message: 'Note deleted' });
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to delete note' });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
-```

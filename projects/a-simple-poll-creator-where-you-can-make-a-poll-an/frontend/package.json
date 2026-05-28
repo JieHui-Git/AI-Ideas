@@ -1,5 +1,5 @@
 {
-  "name": "poll-creator-frontend",
+  "name": "poll-creator",
   "version": "1.0.0",
   "scripts": {
     "dev": "vite",
@@ -8,8 +8,8 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "axios": "^1.3.4",
     "vite": "^4.0.0",
-    "@vitejs/plugin-react": "^4.0.0"
+    "@vitejs/plugin-react": "^4.0.0",
+    "axios": "^1.3.5"
   }
 }

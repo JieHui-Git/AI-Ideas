@@ -1,54 +1,68 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-function App() {
+const App = () => {
   const [notes, setNotes] = useState([]);
-  const [noteText, setNoteText] = useState('');
 
   useEffect(() => {
     fetchNotes();
   }, []);
 
-  async function addNote() {
-    await axios.post('http://localhost:8000/notes', { text: noteText });
-    setNoteText('');
-    fetchNotes();
-  }
+  const fetchNotes = async () => {
+    try {
+      const response = await axios.get('/api/notes');
+      setNotes(response.data);
+    } catch (error) {
+      console.error('Error fetching notes:', error);
+    }
+  };
 
-  async function deleteNote(id) {
-    await axios.delete(`http://localhost:8000/notes/${id}`);
-    fetchNotes();
-  }
+  const createNote = async (content) => {
+    try {
+      const response = await axios.post('/api/notes', { content });
+      setNotes([...notes, response.data]);
+    } catch (error) {
+      console.error('Error creating note:', error);
+    }
+  };
 
-  async function updateNote(id, newText) {
-    await axios.put(`http://localhost:8000/notes/${id}`, { text: newText });
-    fetchNotes();
-  }
+  const updateNote = async (id, content) => {
+    try {
+      const response = await axios.put(`/api/notes/${id}`, { content });
+      setNotes(notes.map((note) => (note._id === id ? response.data : note)));
+    } catch (error) {
+      console.error('Error updating note:', error);
+    }
+  };
 
-  async function fetchNotes() {
-    const response = await axios.get('http://localhost:8000/notes');
-    setNotes(response.data);
-  }
+  const deleteNote = async (id) => {
+    try {
+      await axios.delete(`/api/notes/${id}`);
+      setNotes(notes.filter((note) => note._id !== id));
+    } catch (error) {
+      console.error('Error deleting note:', error);
+    }
+  };
 
   return (
     <div>
       <h1>Notes App</h1>
-      <input value={noteText} onChange={(e) => setNoteText(e.target.value)} />
-      <button onClick={addNote}>Add Note</button>
+      <input type="text" onChange={(e) => setNoteContent(e.target.value)} value={noteContent} />
+      <button onClick={() => createNote(noteContent)}>Create Note</button>
       <ul>
         {notes.map((note) => (
-          <li key={note.id}>
-            <input
-              type="text"
-              value={note.text}
-              onChange={(e) => updateNote(note.id, e.target.value)}
+          <li key={note._id}>
+            <textarea
+              value={note.content}
+              onChange={(e) => setNoteContent(e.target.value)}
             />
-            <button onClick={() => deleteNote(note.id)}>Delete</button>
+            <button onClick={() => updateNote(note._id, noteContent)}>Update</button>
+            <button onClick={() => deleteNote(note._id)}>Delete</button>
           </li>
         ))}
       </ul>
     </div>
   );
-}
+};
 
 export default App;

@@ -61,10 +61,8 @@ const App = () => {
         onChange={(e) => setNoteText(e.target.value)}
         placeholder="Enter a note"
       />
-      {editMode ? (
+      {editMode && (
         <button onClick={editNote}>Save Note</button>
-      ) : (
-        <button onClick={addNote}>Add Note</button>
       )}
       <ul>
         {notes.map(note => (

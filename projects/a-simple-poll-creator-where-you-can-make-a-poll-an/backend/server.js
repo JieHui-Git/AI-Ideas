@@ -1,39 +1,64 @@
-const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+import express from 'express';
+import bodyParser from 'body-parser';
+import fs from 'fs-extra';
 
 const app = express();
-app.use(express.json());
+app.use(bodyParser.json());
 
-const db = new sqlite3.Database(':memory:');
+const PORT = 5000;
 
-db.serialize(() => {
-  db.run("CREATE TABLE polls (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, options TEXT)");
-});
-
-function getPolls(callback) {
-  db.all('SELECT * FROM polls', [], callback);
+// Function to read data from a JSON file or return an empty array if it doesn't exist
+async function readData(filePath) {
+  try {
+    const data = await fs.readJson(filePath);
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error('Error reading data:', err);
+    return [];
+  }
 }
 
-function createPoll(title, options, callback) {
-  const sql = 'INSERT INTO polls (title, options) VALUES (?, ?)';
-  db.run(sql, [title, JSON.stringify(options)], function(err, row) {
-    if (err) throw err;
-    callback(row.lastID);
-  });
+// Function to write data to a JSON file
+async function writeData(filePath, data) {
+  try {
+    await fs.writeJson(filePath, data, { spaces: 2 });
+  } catch (err) {
+    console.error('Error writing data:', err);
+  }
 }
 
-app.get('/polls', (req, res) => {
-  getPolls((err, rows) => {
-    if (err) return res.status(500).send(err);
-    res.json(rows);
-  });
+app.post('/api/polls', async(req, res) => {
+  const newPoll = req.body;
+  let polls = await readData('./polls.json');
+  newPoll.id = polls.length + 1;
+  polls.push(newPoll);
+  await writeData('./polls.json', polls);
+  res.status(201).send(newPoll);
 });
 
-app.post('/polls', (req, res) => {
-  const { title, options } = req.body;
-  createPoll(title, options, (id) => {
-    res.json({ id, title, options });
-  });
+app.get('/api/polls', async (req, res) => {
+  const polls = await readData('./polls.json');
+  res.send(polls);
 });
 
-app.listen(3001, () => console.log('Backend running on http://localhost:3001/'));
+app.post('/api/vote/:pollId/:option', async (req, res) => {
+  const { pollId, option } = req.params;
+  let polls = await readData('./polls.json');
+  
+  const poll = polls.find(p => p.id === parseInt(pollId));
+  if (!poll) return res.status(404).send({ error: 'Poll not found' });
+
+  const existingOption = poll.options.find(opt => opt.text === option);
+  if (existingOption) {
+    existingOption.votes++;
+  } else {
+    poll.options.push({ text: option, votes: 1 });
+  }
+
+  await writeData('./polls.json', polls);
+  res.send(poll);
+});
+
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});

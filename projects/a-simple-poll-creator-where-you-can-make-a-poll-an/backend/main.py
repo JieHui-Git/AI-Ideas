@@ -1,65 +1,44 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import sqlite3
+from typing import List, Optional
+import json
 
 app = FastAPI()
 
-class Poll(BaseModel):
-    question: str
-    options: list
+# In-memory storage for simplicity. Use JSON file for persistence.
+with open("polls.json", "r") as f:
+    polls = json.load(f)
 
-def get_db_connection():
-    conn = sqlite3.connect('polls.db')
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def init_db():
-    conn = get_db_connection()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS polls (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            question TEXT NOT NULL,
-            options TEXT NOT NULL,
-            votes TEXT NOT NULL DEFAULT '{}'
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_db()
-
-@app.post("/polls/", response_model=Poll)
-async def create_poll(poll: Poll):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    options_str = ', '.join(f"'{option}'" for option in poll.options)
-    votes_str = str([0] * len(poll.options))
-    cursor.execute("INSERT INTO polls (question, options, votes) VALUES (?, ?, ?)", (poll.question, options_str, votes_str))
-    conn.commit()
-    new_poll_id = cursor.lastrowid
-    cursor.close()
-    conn.close()
-    return {**poll.dict(), "id": new_poll_id}
-
-@app.get("/polls/", response_model=list[Poll])
+@app.get("/polls/", response_model=List[dict])
 async def read_polls():
-    conn = get_db_connection()
-    polls = conn.execute("SELECT * FROM polls").fetchall()
-    conn.close()
-    return [{"id": poll["id"], "question": poll["question"], "options": poll["options"].split(', '), "votes": list(map(int, poll["votes"].strip('[]').split(', ')))} for poll in polls]
+    return polls
 
-@app.post("/polls/{poll_id}/vote/", status_code=204)
-async def vote_on_poll(poll_id: int, option_index: int):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    poll = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
+@app.post("/polls/")
+async def create_poll(poll: dict):
+    poll["id"] = len(polls) + 1
+    poll["votes"] = {}
+    for option in poll['options']:
+        poll['votes'][option] = 0
+    polls.append(poll)
+    with open("polls.json", "w") as f:
+        json.dump(polls, f)
+    return poll
+
+@app.post("/votes/{poll_id}/{option}")
+async def vote_poll(poll_id: int, option: str):
+    poll = next((p for p in polls if p['id'] == poll_id), None)
     if not poll:
         raise HTTPException(status_code=404, detail="Poll not found")
+    if option not in poll['votes']:
+        raise HTTPException(status_code=400, detail="Invalid vote option")
     
-    votes = list(map(int, poll["votes"].strip('[]').split(', ')))
-    votes[option_index] += 1
-    votes_str = str(votes)
-    cursor.execute("UPDATE polls SET votes = ? WHERE id = ?", (votes_str, poll_id))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    poll['votes'][option] += 1
+    with open("polls.json", "w") as f:
+        json.dump(polls, f)
+    return {"detail": "Vote recorded successfully"}
+
+@app.get("/polls/{poll_id}", response_model=dict)
+async def read_poll(poll_id: int):
+    poll = next((p for p in polls if p['id'] == poll_id), None)
+    if not poll:
+        raise HTTPException(status_code=404, detail="Poll not found")
+    return poll

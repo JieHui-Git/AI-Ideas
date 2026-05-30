@@ -1,52 +1,53 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 
-const App = () => {
+const NotesApp = () => {
   const [notes, setNotes] = useState([]);
-  const [noteText, setNoteText] = useState('');
-  const [editMode, setEditMode] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
 
   useEffect(() => {
-    fetchNotes();
+    fetch('http://localhost:3000/notes')
+      .then(res => res.json())
+      .then(data => setNotes(data));
   }, []);
 
-  const fetchNotes = async () => {
-    try {
-      const response = await axios.get('/api/notes');
-      setNotes(response.data);
-    } catch (error) {
-      console.error('Error fetching notes:', error);
-    }
-  };
-
   const addNote = async () => {
-    if (!noteText.trim()) return;
     try {
-      const response = await axios.post('/api/notes', { text: noteText });
-      setNotes([...notes, response.data]);
-      setNoteText('');
+      const response = await fetch('http://localhost:3000/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content })
+      });
+      if (response.ok) {
+        const newNote = await response.json();
+        setNotes([...notes, newNote]);
+        setTitle('');
+        setContent('');
+      }
     } catch (error) {
       console.error('Error adding note:', error);
     }
   };
 
-  const editNote = async () => {
-    if (!noteText.trim()) return;
+  const updateNote = async (id, newTitle, newContent) => {
     try {
-      await axios.put(`/api/notes/${editingId}`, { text: noteText });
-      setNotes(notes.map(note => note.id === editingId ? { ...note, text: noteText } : note));
-      setEditMode(false);
-      setEditingId(null);
-      setNoteText('');
+      const response = await fetch(`http://localhost:3000/notes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle, content: newContent })
+      });
+      if (response.ok) {
+        const updatedNotes = notes.map(note => note.id === id ? { ...note, title: newTitle, content: newContent } : note);
+        setNotes(updatedNotes);
+      }
     } catch (error) {
-      console.error('Error editing note:', error);
+      console.error('Error updating note:', error);
     }
   };
 
   const deleteNote = async (id) => {
     try {
-      await axios.delete(`/api/notes/${id}`);
+      await fetch(`http://localhost:3000/notes/${id}`, { method: 'DELETE' });
       setNotes(notes.filter(note => note.id !== id));
     } catch (error) {
       console.error('Error deleting note:', error);
@@ -56,28 +57,22 @@ const App = () => {
   return (
     <div>
       <h1>Notes App</h1>
-      <input
-        value={noteText}
-        onChange={(e) => setNoteText(e.target.value)}
-        placeholder="Enter a note"
-      />
-      {editMode ? (
-        <button onClick={editNote}>Save Note</button>
-      ) : (
-        <button onClick={addNote}>Add Note</button>
-      )}
+      <form onSubmit={(e) => { e.preventDefault(); addNote(); }}>
+        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" required />
+        <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Content" required></textarea>
+        <button type="submit">Add Note</button>
+      </form>
       <ul>
         {notes.map(note => (
           <li key={note.id}>
-            {note.text}
-            <div>
-              <button onClick={() => {
-                setEditMode(true);
-                setEditingId(note.id);
-                setNoteText(note.text);
-              }}>Edit</button>
-              <button onClick={() => deleteNote(note.id)}>Delete</button>
-            </div>
+            <h2>{note.title}</h2>
+            <p>{note.content}</p>
+            <form onSubmit={(e) => { e.preventDefault(); updateNote(note.id, title, content); }}>
+              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" required />
+              <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Content" required></textarea>
+              <button type="submit">Update Note</button>
+            </form>
+            <button onClick={() => deleteNote(note.id)}>Delete Note</button>
           </li>
         ))}
       </ul>
@@ -85,4 +80,4 @@ const App = () => {
   );
 };
 
-export default App;
+export default NotesApp;

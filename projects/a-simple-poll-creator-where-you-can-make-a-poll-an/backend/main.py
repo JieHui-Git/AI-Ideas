@@ -1,37 +1,56 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 import sqlite3
 
 app = FastAPI()
 
-# Initialize SQLite database and create table
-connection = sqlite3.connect('polls.db')
-cursor = connection.cursor()
-cursor.execute('CREATE TABLE IF NOT EXISTS polls (id INTEGER PRIMARY KEY, question TEXT, options TEXT, votes TEXT)')
-connection.commit()
+class PollOption(BaseModel):
+    id: str
+    text: str
+    votes: int = 0
 
-@app.get('/polls', response_model=list[dict])
-def get_polls():
-    cursor.execute('SELECT * FROM polls')
-    rows = cursor.fetchall()
-    return [{'id': row[0], 'question': row[1], 'options': eval(row[2]), 'votes': eval(row[3])} for row in rows]
+class Poll(BaseModel):
+    title: str
+    options: list[PollOption]
 
-@app.post('/polls', status_code=201)
-def create_poll(question: str, options: list[str]):
-    cursor.execute("INSERT INTO polls (question, options, votes) VALUES (?, ?, ?)", (question, str(options), str([0] * len(options))))
-    connection.commit()
-    return {'id': cursor.lastrowid, 'question': question, 'options': options, 'votes': [0] * len(options)}
+DATABASE_URL = "polls.db"
 
-@app.post('/polls/{poll_id}/vote')
-def vote(poll_id: int, optionIndex: int):
-    cursor.execute('SELECT votes FROM polls WHERE id = ?', (poll_id,))
-    row = cursor.fetchone()
-    if row:
-        votes = eval(row[0])
-        votes[optionIndex] += 1
-        cursor.execute('UPDATE polls SET votes = ? WHERE id = ?', (str(votes), poll_id))
-        connection.commit()
+# Initialize database and table
+conn = sqlite3.connect(DATABASE_URL)
+cursor = conn.cursor()
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS polls (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    options TEXT NOT NULL
+);
+''')
+conn.commit()
+conn.close()
 
-# Close database connection on shutdown
-@app.on_event("shutdown")
-def shutdown_db():
-    connection.close()
+def get_db_connection():
+    connection = sqlite3.connect(DATABASE_URL)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+@app.get('/polls', response_model=list[Poll])
+def read_polls():
+    conn = get_db_connection()
+    polls = []
+    for row in conn.execute('SELECT * FROM polls').fetchall():
+        polls.append(Poll(title=row['title'], options=[PollOption(**opt) for opt in eval(row['options'])]))
+    conn.close()
+    return polls
+
+@app.post('/polls', response_model=Poll)
+def create_poll(poll: Poll):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    poll_id = uuid.uuid4().hex
+    cursor.execute(
+        "INSERT INTO polls (id, title, options) VALUES (?, ?, ?)",
+        (poll_id, poll.title, str([opt.dict() for opt in poll.options]))
+    )
+    conn.commit()
+    conn.close()
+    return { **poll.dict(), "id": poll_id }

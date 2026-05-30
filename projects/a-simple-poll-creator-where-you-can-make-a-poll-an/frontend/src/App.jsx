@@ -1,92 +1,83 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-function App() {
-  const [newPollQuestion, setNewPollQuestion] = useState('');
-  const [newPollOptions, setNewPollOptions] = useState(['', '', '']);
+const App = () => {
   const [polls, setPolls] = useState([]);
+  const [newPollName, setNewPollName] = useState('');
+  const [newOption, setNewOption] = useState('');
 
+  // Fetch polls data when the component mounts
   useEffect(() => {
-    fetchPolls();
+    axios.get('http://localhost:5000/api/polls')
+      .then(response => {
+        setPolls(response.data);
+      })
+      .catch(error => console.error('Error fetching polls:', error));
   }, []);
 
-  const fetchPolls = async () => {
+  // Handle form submission to create a new poll
+  const handleAddPoll = async () => {
+    if (!newPollName || !newOption) return;
+    
     try {
-      const response = await axios.get('http://localhost:8000/polls');
+      await axios.post('http://localhost:5000/api/polls', { name: newPollName, options: [{ text: newOption, votes: 0 }] });
+      
+      // Fetch the updated polls list
+      const response = await axios.get('http://localhost:5000/api/polls');
       setPolls(response.data);
-    } catch (error) {
-      console.error('Failed to fetch polls:', error);
-    }
-  };
 
-  const createPoll = async (e) => {
-    e.preventDefault();
-    try {
-      if (!newPollQuestion || newPollOptions.some(option => !option)) {
-        alert("Please fill in all fields.");
-        return;
-      }
-      const pollData = {
-        question: newPollQuestion,
-        options: newPollOptions.filter(option => option)
-      };
-      await axios.post('http://localhost:8000/polls', pollData);
-      fetchPolls();
+      // Reset form inputs
+      setNewPollName('');
+      setNewOption('');
     } catch (error) {
-      console.error('Failed to create poll:', error);
-    }
-  };
-
-  const vote = async (pollId, optionIndex) => {
-    try {
-      await axios.post(`http://localhost:8000/polls/${pollId}/vote`, { optionIndex });
-      fetchPolls();
-    } catch (error) {
-      console.error('Failed to cast vote:', error);
+      console.error('Error adding poll:', error);
     }
   };
 
   return (
     <div>
-      <h1>Create a Poll</h1>
-      <form onSubmit={createPoll}>
-        <input
-          type="text"
-          placeholder="Question"
-          value={newPollQuestion}
-          onChange={(e) => setNewPollQuestion(e.target.value)}
+      <h1>Poll Creator</h1>
+      <form onSubmit={e => e.preventDefault()}>
+        <input 
+          type="text" 
+          placeholder="Poll Name" 
+          value={newPollName} 
+          onChange={e => setNewPollName(e.target.value)} 
         />
-        {newPollOptions.map((option, index) => (
-          <input
-            key={index}
-            type="text"
-            placeholder={`Option ${index + 1}`}
-            value={option}
-            onChange={(e) => {
-              const newOptions = [...newPollOptions];
-              newOptions[index] = e.target.value;
-              setNewPollOptions(newOptions);
-            }}
-          />
-        ))}
-        <button type="submit">Create Poll</button>
+        <input 
+          type="text" 
+          placeholder="Option Text" 
+          value={newOption} 
+          onChange={e => setNewOption(e.target.value)} 
+        />
+        <button onClick={handleAddPoll}>Create Poll</button>
       </form>
 
-      <h1>Polls</h1>
       {polls.map(poll => (
         <div key={poll.id}>
-          <h2>{poll.question}</h2>
-          {poll.options.map((option, index) => (
-            <div key={index}>
-              <button onClick={() => vote(poll.id, index)}>
-                {option} ({poll.votes[index] || 0})
-              </button>
-            </div>
-          ))}
+          <h2>{poll.name}</h2>
+          <ul>
+            {poll.options.map(option => (
+              <li key={option.text}>
+                {option.text} - Votes: {option.votes}
+                <button onClick={async () => {
+                  try {
+                    await axios.post(`http://localhost:5000/api/vote/${poll.id}/${option.text}`);
+                    
+                    // Fetch the updated polls list
+                    const response = await axios.get('http://localhost:5000/api/polls');
+                    setPolls(response.data);
+                  } catch (error) {
+                    console.error('Error voting:', error);
+                  }
+                }}>Vote</button>
+              </li>
+            ))}
+          </ul>
         </div>
       ))}
     </div>
   );
-}
+};
 
 export default App;
